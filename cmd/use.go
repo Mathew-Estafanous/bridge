@@ -18,9 +18,11 @@ SessionID - Provided ID of the bridge instance that you intent to connect with.`
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: runUse,
+}
 
-	},
+func runUse(cmd *cobra.Command, args []string) {
+
 }
 
 func init() {

@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 var openCmd = &cobra.Command{
@@ -22,11 +26,27 @@ func init() {
 }
 
 func runOpen(cmd *cobra.Command, args []string) {
-	files, err := allFilesWithinDirectory(".")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	bridge ,err := p2p.NewBridge(ctx)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(len(files))
+	run(bridge, cancel)
+}
+
+func run(bridge *p2p.Bridge, cancel context.CancelFunc) {
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	fmt.Printf("\rExiting...\n")
+	cancel()
+	if err := bridge.Close(); err != nil {
+		fmt.Printf("Encountered issue while closing bridge: %v", err)
+		os.Exit(1)
+	}
 }
 
 type FileData struct {
@@ -38,6 +58,8 @@ func (f FileData) String() string {
 	return f.parent + "/" + f.Name()
 }
 
+// will iterate through all the files within the directory and when a directory is present within
+// the current directory, then it will recursively call the child directory.
 func allFilesWithinDirectory(dir string) ([]FileData, error) {
 	dirInfo, err := os.ReadDir(dir)
 	if err != nil {
