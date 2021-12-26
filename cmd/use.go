@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
+	"log"
 )
 
 var useCmd = &cobra.Command{
@@ -21,10 +24,18 @@ SessionID - Provided ID of the bridge instance that you intent to connect with.`
 	Run: runUse,
 }
 
-func runUse(cmd *cobra.Command, args []string) {
-
-}
-
 func init() {
 	rootCmd.AddCommand(useCmd)
+}
+
+func runUse(cmd *cobra.Command, args []string) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	client ,err := p2p.NewClient(ctx, args[0])
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	run(client, cancel)
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
+	"io"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,23 +32,26 @@ func runOpen(cmd *cobra.Command, args []string) {
 
 	bridge ,err := p2p.NewBridge(ctx)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
+		return
 	}
+	log.Printf("Session ID: %s", bridge.Session())
 	run(bridge, cancel)
 }
 
-func run(bridge *p2p.Bridge, cancel context.CancelFunc) {
+func run(closer io.Closer, cancel context.CancelFunc) {
 	c := make(chan os.Signal, 1)
 
 	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-c
 
-	fmt.Printf("\rExiting...\n")
+	log.Printf("\rExiting...\n")
 	cancel()
-	if err := bridge.Close(); err != nil {
-		fmt.Printf("Encountered issue while closing bridge: %v", err)
+	if err := closer.Close(); err != nil {
+		log.Printf("Encountered issue while closing bridge: %v", err)
 		os.Exit(1)
 	}
+	os.Exit(0)
 }
 
 type FileData struct {
