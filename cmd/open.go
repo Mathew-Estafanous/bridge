@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
@@ -28,25 +27,22 @@ func init() {
 }
 
 func runOpen(cmd *cobra.Command, args []string) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	bridge ,err := p2p.NewBridge(ctx)
+	bridge ,err := p2p.NewBridge()
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	log.Printf("Session ID: %s", bridge.Session())
-	run(bridge, cancel)
+	run(bridge)
 }
 
-func run(closer io.Closer, cancel context.CancelFunc) {
+func run(closer io.Closer) {
 	c := make(chan os.Signal, 1)
 
 	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-c
 
 	log.Printf("\rExiting...\n")
-	cancel()
 	if err := closer.Close(); err != nil {
 		log.Printf("Encountered issue while closing bridge: %v", err)
 		os.Exit(1)

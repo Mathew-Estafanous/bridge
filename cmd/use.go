@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
@@ -29,13 +28,11 @@ func init() {
 }
 
 func runUse(cmd *cobra.Command, args []string) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	client ,err := p2p.NewClient(ctx, args[0])
+	client ,err := p2p.NewClient(args[0])
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	run(client, cancel)
+	run(client)
 }
