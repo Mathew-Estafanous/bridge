@@ -28,16 +28,13 @@ func init() {
 }
 
 func runOpen(cmd *cobra.Command, args []string) {
-	testMode, err := cmd.Flags().GetBool("mode")
+	isTest, err := cmd.Flags().GetBool("test")
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	mode := ""
-	if testMode {
-		mode = "t"
-	}
-	bridge, err := p2p.NewBridge(mode)
+
+	bridge, err := p2p.NewBridge(isTest)
 	if err != nil {
 		log.Println(err)
 		return
@@ -47,7 +44,7 @@ func runOpen(cmd *cobra.Command, args []string) {
 	run(bridge)
 }
 
-func waitForJoinedPeer(bridge *p2p.Bridge) {
+func waitForJoinedPeer(bridge p2p.Bridge) {
 	for {
 		select {
 		case peer := <- bridge.WaitForJoinedPeer():
@@ -60,7 +57,6 @@ func waitForJoinedPeer(bridge *p2p.Bridge) {
 
 func run(closer io.Closer) {
 	c := make(chan os.Signal, 1)
-
 	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-c
 
