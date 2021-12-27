@@ -24,16 +24,38 @@ be shared with those you wish to connect with.`,
 
 func init() {
 	rootCmd.AddCommand(openCmd)
+	rootCmd.PersistentFlags().BoolP("test", "t", false, "determine the mode of the bridge")
 }
 
 func runOpen(cmd *cobra.Command, args []string) {
-	bridge ,err := p2p.NewBridge()
+	testMode, err := cmd.Flags().GetBool("mode")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	mode := ""
+	if testMode {
+		mode = "t"
+	}
+	bridge, err := p2p.NewBridge(mode)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	log.Printf("Session ID: %s", bridge.Session())
+	go waitForJoinedPeer(bridge)
 	run(bridge)
+}
+
+func waitForJoinedPeer(bridge *p2p.Bridge) {
+	for {
+		select {
+		case peer := <- bridge.WaitForJoinedPeer():
+			if err := bridge.Send(peer.Id , []byte("hi friend!")); err != nil {
+				log.Println(err)
+			}
+		}
+	}
 }
 
 func run(closer io.Closer) {

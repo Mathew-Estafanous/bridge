@@ -33,6 +33,5 @@ func runUse(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-
 	run(client)
 }
