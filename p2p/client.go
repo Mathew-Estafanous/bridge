@@ -15,11 +15,7 @@ type Client struct {
 	h host.Host
 }
 
-func (c *Client) HandlePeerFound(info peer.AddrInfo) {
-	if info.ID == c.h.ID() {
-		return
-	}
-}
+func (c *Client) HandlePeerFound(_ peer.AddrInfo) {}
 
 func (c *Client) Close() error {
 	return c.h.Close()

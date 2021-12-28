@@ -44,7 +44,7 @@ func runOpen(cmd *cobra.Command, args []string) {
 	run(bridge)
 }
 
-func waitForJoinedPeer(bridge p2p.Bridge) {
+func waitForJoinedPeer(bridge *p2p.Bridge) {
 	for {
 		select {
 		case peer := <- bridge.JoinedPeerListener():
@@ -70,11 +70,11 @@ func run(closer io.Closer) {
 
 type FileData struct {
 	os.FileInfo
-	parent string // the parent directory.
+	path string // the path directory.
 }
 
 func (f FileData) String() string {
-	return f.parent + "/" + f.Name()
+	return f.path + "/" + f.Name()
 }
 
 // will iterate through all the files within the directory and when a directory is present within
@@ -102,7 +102,7 @@ func allFilesWithinDirectory(dir string) ([]FileData, error) {
 			}
 			info = append(info, FileData{
 				FileInfo: fileInfo,
-				parent: dir,
+				path:     dir,
 			})
 		}
 	}

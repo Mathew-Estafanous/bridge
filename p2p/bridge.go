@@ -9,50 +9,36 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
-	"io"
 	"log"
 )
-
-// Bridge is the running instance that can be connected to and
-// interacted with.
-type Bridge interface {
-	io.Closer
-	// Session returns the bridge's session id.
-	Session() string
-
-	// JoinedPeerListener provides a channel that can be used to listen
-	// for a new peer the joins.
-	JoinedPeerListener() <- chan Peer
-
-	// Send will stream the data to the peer with the given id.
-	Send(id string, data []byte) error
-}
 
 // Peer is general information regarding a peer within the system.
 type Peer struct {
 	Id string
 }
 
-type bridge struct {
+// Bridge is the running instance that can be connected to and
+// interacted with.
+type Bridge struct {
 	session string
 	h      host.Host
 	joinCh chan Peer
 }
 
-func (b *bridge) JoinedPeerListener() <- chan Peer {
+func (b *Bridge) JoinedPeerListener() <- chan Peer {
 	return b.joinCh
 }
 
-func (b *bridge) Session() string {
+func (b *Bridge) Session() string {
 	return b.session
 }
 
-func (b *bridge) Close() error {
+func (b *Bridge) Close() error {
 	close(b.joinCh)
 	return b.h.Close()
 }
 
-func (b *bridge) Send(id string, data []byte) error {
+func (b *Bridge) Send(id string, data []byte) error {
 	peerId, err := peer.Decode(id)
 	if err != nil {
 		return err
@@ -68,7 +54,7 @@ func (b *bridge) Send(id string, data []byte) error {
 	return strm.Close()
 }
 
-func (b *bridge) HandlePeerFound(info peer.AddrInfo) {
+func (b *Bridge) HandlePeerFound(info peer.AddrInfo) {
 	if info.ID == b.h.ID() {
 		return
 	}
@@ -80,7 +66,7 @@ func (b *bridge) HandlePeerFound(info peer.AddrInfo) {
 	b.joinCh <- Peer{info.ID.Pretty()}
 }
 
-func NewBridge(testMode bool) (Bridge, error) {
+func NewBridge(testMode bool) (*Bridge, error) {
 	host, err:= libp2p.New()
 	if err != nil {
 		return nil, err
@@ -93,7 +79,7 @@ func NewBridge(testMode bool) (Bridge, error) {
 		sessionId = uuid.New().String()
 	}
 
-	brg := &bridge{
+	brg := &Bridge{
 		session: sessionId,
 		h: host,
 		joinCh: make(chan Peer, 1),
