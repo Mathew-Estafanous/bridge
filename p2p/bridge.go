@@ -6,12 +6,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"io"
-	"io/ioutil"
 	"log"
 )
 
@@ -95,60 +93,19 @@ func NewBridge(testMode bool) (Bridge, error) {
 		sessionId = uuid.New().String()
 	}
 
-	bridge := &bridge{
+	brg := &bridge{
 		session: sessionId,
 		h: host,
 		joinCh: make(chan Peer, 1),
 	}
 	
-	if err := setupDiscovery(host, sessionId, bridge); err != nil {
+	if err := setupDiscovery(host, sessionId, brg); err != nil {
 		return nil, err
 	}
-	return bridge, nil
+	return brg, nil
 }
 
 func setupDiscovery(host host.Host, ns string, notifee mdns.Notifee) error {
 	s := mdns.NewMdnsService(host, ns, notifee)
 	return s.Start()
-}
-
-type Client struct {
-	s string
-	h host.Host
-}
-
-func (c *Client) HandlePeerFound(info peer.AddrInfo) {
-	if info.ID == c.h.ID() {
-		return
-	}
-}
-
-func (c *Client) Close() error {
-	return c.h.Close()
-}
-
-func NewClient(sessionID string) (*Client, error) {
-	host, err:= libp2p.New()
-	if err != nil {
-		return nil, err
-	}
-	c := &Client{
-		h: host,
-		s: sessionID,
-	}
-
-	host.SetStreamHandler(protocol.ID(sessionID), c.handleMessage)
-	if err := setupDiscovery(host, sessionID, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *Client) handleMessage(strm network.Stream) {
-	b, err := ioutil.ReadAll(strm)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println(string(b))
 }
