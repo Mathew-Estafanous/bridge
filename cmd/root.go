@@ -3,8 +3,8 @@ package cmd
 import "github.com/spf13/cobra"
 
 var rootCmd = &cobra.Command{
-	Use: "bridge",
-	Short: "Bridge is a simple peer-to-peer file sync CLI tool.",
+	Use:   "bridge",
+	Short: "Bridge is a simple peer-to-peer fs sync CLI tool.",
 	Long: `Bridge aims to be fast and simple approach to syncing content within a folder.
 
 Simply start up a bridge instance and share the session with whomever you wish to sync your folder with. 

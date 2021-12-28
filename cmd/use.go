@@ -8,10 +8,10 @@ import (
 )
 
 var useCmd = &cobra.Command{
-	Use: "use SessionID",
-	Short: "Connect to a bridge and start file sync.",
+	Use:   "use SessionID",
+	Short: "Connect to a bridge and start fs sync.",
 	Long: `Uses the provided session id token to connect with a bridge instance and when a
-connection has be successful file sync will automatically start within the current directory.
+connection has be successful fs sync will automatically start within the current directory.
 
 SessionID - Provided ID of the bridge instance that you intent to connect with.`,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -28,7 +28,7 @@ func init() {
 }
 
 func runUse(cmd *cobra.Command, args []string) {
-	client ,err := p2p.NewClient(args[0])
+	client, err := p2p.NewClient(args[0])
 	if err != nil {
 		log.Println(err)
 		return

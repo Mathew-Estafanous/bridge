@@ -22,7 +22,7 @@ func (c *Client) Close() error {
 }
 
 func NewClient(sessionID string) (*Client, error) {
-	host, err:= libp2p.New()
+	host, err := libp2p.New()
 	if err != nil {
 		return nil, err
 	}

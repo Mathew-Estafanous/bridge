@@ -9,6 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	"io"
 	"log"
 )
 
@@ -21,11 +22,11 @@ type Peer struct {
 // interacted with.
 type Bridge struct {
 	session string
-	h      host.Host
-	joinCh chan Peer
+	h       host.Host
+	joinCh  chan Peer
 }
 
-func (b *Bridge) JoinedPeerListener() <- chan Peer {
+func (b *Bridge) JoinedPeerListener() <-chan Peer {
 	return b.joinCh
 }
 
@@ -38,20 +39,17 @@ func (b *Bridge) Close() error {
 	return b.h.Close()
 }
 
-func (b *Bridge) Send(id string, data []byte) error {
+func (b *Bridge) OpenStream(id string) (io.ReadWriter, error) {
 	peerId, err := peer.Decode(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	strm, err := b.h.NewStream(context.Background(), peerId, protocol.ID(b.session))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if _, err := strm.Write(data); err != nil {
-		return err
-	}
-	return strm.Close()
+	return strm, nil
 }
 
 func (b *Bridge) HandlePeerFound(info peer.AddrInfo) {
@@ -67,7 +65,7 @@ func (b *Bridge) HandlePeerFound(info peer.AddrInfo) {
 }
 
 func NewBridge(testMode bool) (*Bridge, error) {
-	host, err:= libp2p.New()
+	host, err := libp2p.New()
 	if err != nil {
 		return nil, err
 	}
@@ -81,10 +79,10 @@ func NewBridge(testMode bool) (*Bridge, error) {
 
 	brg := &Bridge{
 		session: sessionId,
-		h: host,
-		joinCh: make(chan Peer, 1),
+		h:       host,
+		joinCh:  make(chan Peer, 1),
 	}
-	
+
 	if err := setupDiscovery(host, sessionId, brg); err != nil {
 		return nil, err
 	}
