@@ -1,13 +1,15 @@
 package p2p
 
 import (
+	"encoding/binary"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"io/ioutil"
+	"io"
 	"log"
+	"os"
 )
 
 type Client struct {
@@ -39,10 +41,29 @@ func NewClient(sessionID string) (*Client, error) {
 }
 
 func (c *Client) handleMessage(strm network.Stream) {
-	b, err := ioutil.ReadAll(strm)
+	defer strm.Close()
+	b := make([]byte, 5)
+	if _, err := strm.Read(b); err != nil {
+		log.Println(err)
+		return
+	}
+	pathLn := binary.LittleEndian.Uint32(b)
+	pathB := make([]byte, pathLn)
+	if _, err := strm.Read(pathB); err != nil {
+		log.Println(err)
+		return
+	}
+	path := string(pathB)
+
+	f, err := os.Create(path)
+	defer f.Close()
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	log.Println(string(b))
+
+	if _, err := io.Copy(f, strm); err != nil {
+		log.Println(err)
+		return
+	}
 }

@@ -62,7 +62,7 @@ func (w *WriteStream) transferFile(jobs <-chan FileData, result chan Result) {
 			continue
 		}
 		ln := uint32(len([]byte(fd.path)))
-		pathLn := make([]byte, 4)
+		pathLn := make([]byte, 5)
 		binary.LittleEndian.PutUint32(pathLn, ln)
 		pathData := append(pathLn, []byte(fd.path)...)
 		if _, err := strm.Write(pathData); err != nil {
