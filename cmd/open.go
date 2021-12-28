@@ -47,7 +47,7 @@ func runOpen(cmd *cobra.Command, args []string) {
 func waitForJoinedPeer(bridge p2p.Bridge) {
 	for {
 		select {
-		case peer := <- bridge.WaitForJoinedPeer():
+		case peer := <- bridge.JoinedPeerListener():
 			if err := bridge.Send(peer.Id , []byte("hi friend!")); err != nil {
 				log.Println(err)
 			}

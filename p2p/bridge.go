@@ -15,19 +15,22 @@ import (
 	"log"
 )
 
+// Bridge is the running instance that can be connected to and
+// interacted with.
 type Bridge interface {
 	io.Closer
 	// Session returns the bridge's session id.
 	Session() string
 
-	// WaitForJoinedPeer provides a channel that can be used to listen
+	// JoinedPeerListener provides a channel that can be used to listen
 	// for a new peer the joins.
-	WaitForJoinedPeer() <- chan Peer
+	JoinedPeerListener() <- chan Peer
 
 	// Send will stream the data to the peer with the given id.
 	Send(id string, data []byte) error
 }
 
+// Peer is general information regarding a peer within the system.
 type Peer struct {
 	Id string
 }
@@ -38,7 +41,7 @@ type bridge struct {
 	joinCh chan Peer
 }
 
-func (b *bridge) WaitForJoinedPeer() <- chan Peer {
+func (b *bridge) JoinedPeerListener() <- chan Peer {
 	return b.joinCh
 }
 
@@ -47,6 +50,7 @@ func (b *bridge) Session() string {
 }
 
 func (b *bridge) Close() error {
+	close(b.joinCh)
 	return b.h.Close()
 }
 
@@ -63,7 +67,7 @@ func (b *bridge) Send(id string, data []byte) error {
 	if _, err := strm.Write(data); err != nil {
 		return err
 	}
-	return nil
+	return strm.Close()
 }
 
 func (b *bridge) HandlePeerFound(info peer.AddrInfo) {
@@ -96,21 +100,11 @@ func NewBridge(testMode bool) (Bridge, error) {
 		h: host,
 		joinCh: make(chan Peer, 1),
 	}
-
-	host.SetStreamHandler(protocol.ID(sessionId), bridge.handleMessage)
+	
 	if err := setupDiscovery(host, sessionId, bridge); err != nil {
 		return nil, err
 	}
 	return bridge, nil
-}
-
-func (br *bridge) handleMessage(strm network.Stream) {
-	b, err := ioutil.ReadAll(strm)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println(string(b))
 }
 
 func setupDiscovery(host host.Host, ns string, notifee mdns.Notifee) error {
