@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -45,6 +46,11 @@ func (w *WriteStream) Start() {
 			fileJobs <- f
 		}
 		close(fileJobs)
+
+		for a := 1; a <= len(w.fd); a++ {
+			<-results
+		}
+		close(results)
 	}()
 }
 
@@ -55,13 +61,26 @@ func (w *WriteStream) transferFile(jobs <-chan FileData, result chan Result) {
 			result <- Result{fd.Name(), err}
 			continue
 		}
+		ln := uint32(len([]byte(fd.path)))
+		pathLn := make([]byte, 4)
+		binary.LittleEndian.PutUint32(pathLn, ln)
+		pathData := append(pathLn, []byte(fd.path)...)
+		if _, err := strm.Write(pathData); err != nil {
+			result <- Result{fd.Name(), err}
+			continue
+		}
+
 		f, err := os.Open(fd.String())
 		if err != nil {
 			result <- Result{fd.Name(), err}
 			continue
 		}
 
-		_, _ = io.Copy(strm, f)
+		if _, err := io.Copy(strm, f); err != nil {
+			result <- Result{fd.Name(), err}
+			continue
+		}
+		result <- Result{fd.Name(), nil}
 	}
 }
 

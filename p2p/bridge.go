@@ -13,10 +13,8 @@ import (
 	"log"
 )
 
-// Peer is general information regarding a peer within the system.
-type Peer struct {
-	Id string
-}
+// Peer is the ID of a peer within the system.
+type Peer peer.ID
 
 // Bridge is the running instance that can be connected to and
 // interacted with.
@@ -39,13 +37,8 @@ func (b *Bridge) Close() error {
 	return b.h.Close()
 }
 
-func (b *Bridge) OpenStream(id string) (io.ReadWriter, error) {
-	peerId, err := peer.Decode(id)
-	if err != nil {
-		return nil, err
-	}
-
-	strm, err := b.h.NewStream(context.Background(), peerId, protocol.ID(b.session))
+func (b *Bridge) OpenStream(p Peer) (io.ReadWriter, error) {
+	strm, err := b.h.NewStream(context.Background(), peer.ID(p), protocol.ID(b.session))
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +54,7 @@ func (b *Bridge) HandlePeerFound(info peer.AddrInfo) {
 	if err != nil {
 		fmt.Printf("error connecting to peer %s: %s\n", info.ID.Pretty(), err)
 	}
-	b.joinCh <- Peer{info.ID.Pretty()}
+	b.joinCh <- Peer(info.ID)
 }
 
 func NewBridge(testMode bool) (*Bridge, error) {
