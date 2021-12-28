@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/Mathew-Estafanous/bridge/fs"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
 	"io"
@@ -39,7 +40,22 @@ func runOpen(cmd *cobra.Command, args []string) {
 		return
 	}
 	log.Printf("Session ID: %s", bridge.Session())
+	go test(bridge)
 	run(bridge)
+}
+
+func test(bridge *p2p.Bridge) {
+	for {
+		select {
+		case p := <-bridge.JoinedPeerListener():
+			ws, err := fs.NewWriteStream(p, bridge)
+			if err != nil {
+				log.Printf("Failed to create write stream: %v", err)
+				continue
+			}
+			ws.Start()
+		}
+	}
 }
 
 func run(closer io.Closer) {

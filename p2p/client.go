@@ -47,6 +47,7 @@ func (c *Client) handleMessage(strm network.Stream) {
 		log.Println(err)
 		return
 	}
+	log.Println(b)
 	pathLn := binary.LittleEndian.Uint32(b)
 	pathB := make([]byte, pathLn)
 	if _, err := strm.Read(pathB); err != nil {
@@ -54,6 +55,7 @@ func (c *Client) handleMessage(strm network.Stream) {
 		return
 	}
 	path := string(pathB)
+	log.Println(path)
 
 	f, err := os.Create(path)
 	defer f.Close()

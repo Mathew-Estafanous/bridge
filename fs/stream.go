@@ -3,6 +3,7 @@ package fs
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/Mathew-Estafanous/bridge/p2p"
 	"io"
 	"os"
 )
@@ -10,25 +11,25 @@ import (
 // StreamOpener is an interface that enables the ability to open a read/write
 // connection with another peer using the peer's ID.
 type StreamOpener interface {
-	OpenStream(peerId string) (io.ReadWriter, error)
+	OpenStream(peerId p2p.Peer) (io.ReadWriter, error)
 }
 
 // WriteStream , when running, asynchronously streams all file data within the
 // running directory to the target peer.
 type WriteStream struct {
 	opener   StreamOpener
-	targetId string
+	p p2p.Peer
 	fd       []FileData
 }
 
-func NewWriteStream(peerId string, opener StreamOpener) (*WriteStream, error) {
-	fileData, err := allFilesWithinDirectory("")
+func NewWriteStream(peer p2p.Peer, opener StreamOpener) (*WriteStream, error) {
+	fileData, err := allFilesWithinDirectory(".")
 	if err != nil {
 		return nil, err
 	}
 	return &WriteStream{
 		opener:   opener,
-		targetId: peerId,
+		p: peer,
 		fd:       fileData,
 	}, nil
 }
@@ -56,15 +57,15 @@ func (w *WriteStream) Start() {
 
 func (w *WriteStream) transferFile(jobs <-chan FileData, result chan Result) {
 	for fd := range jobs {
-		strm, err := w.opener.OpenStream(w.targetId)
+		strm, err := w.opener.OpenStream(w.p)
 		if err != nil {
 			result <- Result{fd.Name(), err}
 			continue
 		}
-		ln := uint32(len([]byte(fd.path)))
+		ln := uint32(len([]byte(fd.String())))
 		pathLn := make([]byte, 5)
 		binary.LittleEndian.PutUint32(pathLn, ln)
-		pathData := append(pathLn, []byte(fd.path)...)
+		pathData := append(pathLn, []byte(fd.String())...)
 		if _, err := strm.Write(pathData); err != nil {
 			result <- Result{fd.Name(), err}
 			continue
