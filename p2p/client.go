@@ -19,6 +19,7 @@ var reg = regexp.MustCompile("(/[^/]*)+$")
 type Client struct {
 	s string
 	h host.Host
+	streamCh chan io.ReadCloser
 }
 
 func (c *Client) HandlePeerFound(_ peer.AddrInfo) {}
@@ -42,6 +43,10 @@ func NewClient(sessionID string) (*Client, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func (c *Client) ListenForStream() <-chan io.ReadCloser {
+	return c.streamCh
 }
 
 func (c *Client) handleMessage(strm network.Stream) {

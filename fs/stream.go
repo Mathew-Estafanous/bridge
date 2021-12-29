@@ -11,7 +11,13 @@ import (
 // StreamOpener is an interface that enables the ability to open a read/write
 // connection with another peer using the peer's ID.
 type StreamOpener interface {
-	OpenStream(peerId p2p.Peer) (io.ReadWriter, error)
+	OpenStream(peerId p2p.Peer) (io.WriteCloser, error)
+}
+
+// StreamListener is an interfaces that allows for listening for any new stream
+// connections with this peer.
+type StreamListener interface {
+	ListenForStream() <- chan io.ReadCloser
 }
 
 // SendStream , when running, asynchronously streams all file data within the
@@ -60,6 +66,7 @@ func (s *SendStream) transferFile(jobs <-chan FileData, result chan Result) {
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
 			result <- Result{fd.Name(), err}
+			strm.Close()
 			continue
 		}
 		ln := uint32(len([]byte(fd.String())))
@@ -68,20 +75,24 @@ func (s *SendStream) transferFile(jobs <-chan FileData, result chan Result) {
 		pathData := append(pathLn, []byte(fd.String())...)
 		if _, err := strm.Write(pathData); err != nil {
 			result <- Result{fd.Name(), err}
+			strm.Close()
 			continue
 		}
 
 		f, err := os.Open(fd.String())
 		if err != nil {
 			result <- Result{fd.Name(), err}
+			strm.Close()
 			continue
 		}
 
 		if _, err := io.Copy(strm, f); err != nil {
 			result <- Result{fd.Name(), err}
+			strm.Close()
 			continue
 		}
 		result <- Result{fd.Name(), nil}
+		strm.Close()
 	}
 }
 

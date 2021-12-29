@@ -37,7 +37,7 @@ func (b *Bridge) Close() error {
 	return b.h.Close()
 }
 
-func (b *Bridge) OpenStream(p Peer) (io.ReadWriter, error) {
+func (b *Bridge) OpenStream(p Peer) (io.WriteCloser, error) {
 	strm, err := b.h.NewStream(context.Background(), peer.ID(p), protocol.ID(b.session))
 	if err != nil {
 		return nil, err

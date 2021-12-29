@@ -40,11 +40,12 @@ func runOpen(cmd *cobra.Command, args []string) {
 		return
 	}
 	log.Printf("Session ID: %s", bridge.Session())
-	go test(bridge)
+	go handledJoined(bridge)
 	run(bridge)
 }
 
-func test(bridge *p2p.Bridge) {
+// TODO: Change how joined peers are handled.
+func handledJoined(bridge *p2p.Bridge) {
 	for {
 		select {
 		case p := <-bridge.JoinedPeerListener():
