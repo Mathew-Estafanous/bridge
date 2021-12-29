@@ -10,7 +10,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 )
+
+var reg = regexp.MustCompile("(/[^/]*)+$")
 
 type Client struct {
 	s string
@@ -47,7 +51,6 @@ func (c *Client) handleMessage(strm network.Stream) {
 		log.Println(err)
 		return
 	}
-	log.Println(b)
 	pathLn := binary.LittleEndian.Uint32(b)
 	pathB := make([]byte, pathLn)
 	if _, err := strm.Read(pathB); err != nil {
@@ -55,7 +58,14 @@ func (c *Client) handleMessage(strm network.Stream) {
 		return
 	}
 	path := string(pathB)
-	log.Println(path)
+	i := strings.LastIndex(path, "/")
+	dir := path[:i]
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0777); err != nil {
+			log.Println(err)
+			return
+		}
+	}
 
 	f, err := os.Create(path)
 	defer f.Close()

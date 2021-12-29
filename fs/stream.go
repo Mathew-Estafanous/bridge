@@ -14,50 +14,50 @@ type StreamOpener interface {
 	OpenStream(peerId p2p.Peer) (io.ReadWriter, error)
 }
 
-// WriteStream , when running, asynchronously streams all file data within the
+// SendStream , when running, asynchronously streams all file data within the
 // running directory to the target peer.
-type WriteStream struct {
-	opener   StreamOpener
-	p p2p.Peer
-	fd       []FileData
+type SendStream struct {
+	opener StreamOpener
+	p      p2p.Peer
+	fd     []FileData
 }
 
-func NewWriteStream(peer p2p.Peer, opener StreamOpener) (*WriteStream, error) {
+func NewWriteStream(peer p2p.Peer, opener StreamOpener) (*SendStream, error) {
 	fileData, err := allFilesWithinDirectory(".")
 	if err != nil {
 		return nil, err
 	}
-	return &WriteStream{
-		opener:   opener,
-		p: peer,
-		fd:       fileData,
+	return &SendStream{
+		opener: opener,
+		p:      peer,
+		fd:     fileData,
 	}, nil
 }
 
 // Start will start the streaming process in a separate goroutine.
-func (w *WriteStream) Start() {
+func (s *SendStream) Start() {
 	go func() {
-		fileJobs := make(chan FileData, len(w.fd))
-		results := make(chan Result, len(w.fd))
+		fileJobs := make(chan FileData, len(s.fd))
+		results := make(chan Result, len(s.fd))
 		for i := 0; i < 5; i++ {
-			go w.transferFile(fileJobs, results)
+			go s.transferFile(fileJobs, results)
 		}
 
-		for _, f := range w.fd {
+		for _, f := range s.fd {
 			fileJobs <- f
 		}
 		close(fileJobs)
 
-		for a := 1; a <= len(w.fd); a++ {
+		for a := 1; a <= len(s.fd); a++ {
 			<-results
 		}
 		close(results)
 	}()
 }
 
-func (w *WriteStream) transferFile(jobs <-chan FileData, result chan Result) {
+func (s *SendStream) transferFile(jobs <-chan FileData, result chan Result) {
 	for fd := range jobs {
-		strm, err := w.opener.OpenStream(w.p)
+		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
 			result <- Result{fd.Name(), err}
 			continue
