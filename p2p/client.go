@@ -21,6 +21,7 @@ type Client struct {
 func (c *Client) HandlePeerFound(_ peer.AddrInfo) {}
 
 func (c *Client) Close() error {
+	close(c.streamCh)
 	return c.h.Close()
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"io"
+	"log"
 	"os"
 	"strings"
 )
@@ -84,16 +85,19 @@ func (s *FileSender) transferFile(jobs <-chan FileData, result chan Result) {
 		if err != nil {
 			result <- Result{fd.Name(), err}
 			strm.Close()
+			f.Close()
 			continue
 		}
 
 		if _, err := io.Copy(strm, f); err != nil {
 			result <- Result{fd.Name(), err}
 			strm.Close()
+			f.Close()
 			continue
 		}
 		result <- Result{fd.Name(), nil}
 		strm.Close()
+		f.Close()
 	}
 }
 
@@ -159,7 +163,11 @@ func (r *FileReceiver) startListening() {
 	for {
 		select {
 		case strm := <-r.lis.ListenForStream():
-			_ = writeFile(strm)
+			go func() {
+				if err := writeFile(strm); err != nil {
+					log.Println(err)
+				}
+			}()
 		}
 	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/Mathew-Estafanous/bridge/fs"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/spf13/cobra"
 	"log"
@@ -33,5 +34,7 @@ func runUse(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
+
+	_ = fs.NewFileReceiver(client)
 	run(client)
 }
