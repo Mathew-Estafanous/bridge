@@ -6,6 +6,7 @@ import (
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"io"
 	"os"
+	"strings"
 )
 
 // StreamOpener is an interface that enables the ability to open a read/write
@@ -20,20 +21,20 @@ type StreamListener interface {
 	ListenForStream() <- chan io.ReadCloser
 }
 
-// SendStream , when running, asynchronously streams all file data within the
+// FileSender , when running, asynchronously streams all file data within the
 // running directory to the target peer.
-type SendStream struct {
+type FileSender struct {
 	opener StreamOpener
 	p      p2p.Peer
 	fd     []FileData
 }
 
-func NewWriteStream(peer p2p.Peer, opener StreamOpener) (*SendStream, error) {
+func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
 	fileData, err := allFilesWithinDirectory(".")
 	if err != nil {
 		return nil, err
 	}
-	return &SendStream{
+	return &FileSender{
 		opener: opener,
 		p:      peer,
 		fd:     fileData,
@@ -41,7 +42,7 @@ func NewWriteStream(peer p2p.Peer, opener StreamOpener) (*SendStream, error) {
 }
 
 // Start will start the streaming process in a separate goroutine.
-func (s *SendStream) Start() {
+func (s *FileSender) Start() {
 	go func() {
 		fileJobs := make(chan FileData, len(s.fd))
 		results := make(chan Result, len(s.fd))
@@ -61,7 +62,7 @@ func (s *SendStream) Start() {
 	}()
 }
 
-func (s *SendStream) transferFile(jobs <-chan FileData, result chan Result) {
+func (s *FileSender) transferFile(jobs <-chan FileData, result chan Result) {
 	for fd := range jobs {
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
@@ -140,4 +141,57 @@ func allFilesWithinDirectory(dir string) ([]FileData, error) {
 		}
 	}
 	return info, nil
+}
+
+// FileReceiver is used to accept file data through a stream and write the file data within
+// the current execution directory.
+type FileReceiver struct {
+	lis StreamListener
+}
+
+func NewFileReceiver(lis StreamListener) *FileReceiver {
+	r := &FileReceiver{lis}
+	go r.startListening()
+	return r
+}
+
+func (r *FileReceiver) startListening() {
+	for {
+		select {
+		case strm := <-r.lis.ListenForStream():
+			_ = writeFile(strm)
+		}
+	}
+}
+
+func writeFile(strm io.ReadCloser) error {
+	defer strm.Close()
+	b := make([]byte, 5)
+	if _, err := strm.Read(b); err != nil {
+		return err
+	}
+	pathLn := binary.LittleEndian.Uint32(b)
+	pathB := make([]byte, pathLn)
+	if _, err := strm.Read(pathB); err != nil {
+		return err
+	}
+	path := string(pathB)
+	i := strings.LastIndex(path, "/")
+	dir := path[:i]
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0777); err != nil {
+			return err
+		}
+	}
+
+	f, err := os.Create(path)
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(f, strm); err != nil {
+		return err
+	}
+	return nil
 }
