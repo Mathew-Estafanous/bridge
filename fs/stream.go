@@ -22,12 +22,30 @@ type StreamListener interface {
 	ListenForStream() <-chan io.ReadCloser
 }
 
+type EventType uint8
+
+const (
+	// Start event represents the beginning of a file job.
+	Start EventType = iota
+	// Done event represents the successful completion of the file job.
+	Done
+	// Failed event occurs when a file job failed and can no longer continue.
+	Failed
+)
+
+type FileEvent struct {
+	typ EventType
+	name string // name of the file for the event.
+	err error // an associated error if the event is an error.
+}
+
 // FileSender , when running, asynchronously streams all file data within the
 // running directory to the target peer.
 type FileSender struct {
 	opener StreamOpener
 	p      p2p.Peer
 	fd     []FileData
+	resultCh chan FileEvent
 }
 
 func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
@@ -39,6 +57,7 @@ func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
 		opener: opener,
 		p:      peer,
 		fd:     fileData,
+		resultCh: make(chan FileEvent, len(fileData)),
 	}, nil
 }
 
@@ -46,28 +65,30 @@ func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
 func (s *FileSender) Start() {
 	go func() {
 		fileJobs := make(chan FileData, len(s.fd))
-		results := make(chan Result, len(s.fd))
 		for i := 0; i < 5; i++ {
-			go s.transferFile(fileJobs, results)
+			go s.transferFile(fileJobs)
 		}
 
 		for _, f := range s.fd {
 			fileJobs <- f
 		}
 		close(fileJobs)
-
-		for a := 1; a <= len(s.fd); a++ {
-			<-results
-		}
-		close(results)
 	}()
 }
 
-func (s *FileSender) transferFile(jobs <-chan FileData, result chan Result) {
+func (s *FileSender) transferFile(jobs <-chan FileData) {
 	for fd := range jobs {
+		newFileEvent := func(t EventType, err error) FileEvent {
+			return FileEvent{
+				typ: t,
+				name: fd.Name(),
+				err: err,
+			}
+		}
+
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
-			result <- Result{fd.Name(), err}
+			s.resultCh <- newFileEvent(Failed, err)
 			strm.Close()
 			continue
 		}
@@ -76,34 +97,29 @@ func (s *FileSender) transferFile(jobs <-chan FileData, result chan Result) {
 		binary.LittleEndian.PutUint32(pathLn, ln)
 		pathData := append(pathLn, []byte(fd.String())...)
 		if _, err := strm.Write(pathData); err != nil {
-			result <- Result{fd.Name(), err}
+			s.resultCh <- newFileEvent(Failed, err)
 			strm.Close()
 			continue
 		}
 
 		f, err := os.Open(fd.String())
 		if err != nil {
-			result <- Result{fd.Name(), err}
+			s.resultCh <- newFileEvent(Failed, err)
 			strm.Close()
 			f.Close()
 			continue
 		}
 
 		if _, err := io.Copy(strm, f); err != nil {
-			result <- Result{fd.Name(), err}
+			s.resultCh <- newFileEvent(Failed, err)
 			strm.Close()
 			f.Close()
 			continue
 		}
-		result <- Result{fd.Name(), nil}
+		s.resultCh <- newFileEvent(Done, nil)
 		strm.Close()
 		f.Close()
 	}
-}
-
-type Result struct {
-	name string // name of the file.
-	err  error  // nil if work was successful or non-nil if failed.
 }
 
 type FileData struct {
@@ -183,9 +199,11 @@ func writeFile(strm io.ReadCloser) error {
 	if _, err := strm.Read(pathB); err != nil {
 		return err
 	}
+
 	path := string(pathB)
 	i := strings.LastIndex(path, "/")
 	dir := path[:i]
+
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0777); err != nil {
 			return err
