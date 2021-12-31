@@ -13,8 +13,8 @@ import (
 var reg = regexp.MustCompile("(/[^/]*)+$")
 
 type Client struct {
-	s string
-	h host.Host
+	s        string
+	h        host.Host
 	streamCh chan io.ReadCloser
 }
 
@@ -31,8 +31,8 @@ func NewClient(sessionID string) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		h: host,
-		s: sessionID,
+		h:        host,
+		s:        sessionID,
 		streamCh: make(chan io.ReadCloser, 1),
 	}
 

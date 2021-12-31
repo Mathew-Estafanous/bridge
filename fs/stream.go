@@ -19,7 +19,7 @@ type StreamOpener interface {
 // StreamListener is an interfaces that allows for listening for any new stream
 // connections with this peer.
 type StreamListener interface {
-	ListenForStream() <- chan io.ReadCloser
+	ListenForStream() <-chan io.ReadCloser
 }
 
 // FileSender , when running, asynchronously streams all file data within the
