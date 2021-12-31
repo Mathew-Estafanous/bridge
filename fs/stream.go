@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"io"
-	"log"
 	"os"
 	"strings"
 )
@@ -44,8 +43,8 @@ type FileEvent struct {
 type FileSender struct {
 	opener StreamOpener
 	p      p2p.Peer
-	fd     []FileData
-	resultCh chan FileEvent
+	fd      []FileData
+	eventCh chan FileEvent
 }
 
 func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
@@ -54,10 +53,10 @@ func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
 		return nil, err
 	}
 	return &FileSender{
-		opener: opener,
-		p:      peer,
-		fd:     fileData,
-		resultCh: make(chan FileEvent, len(fileData)),
+		opener:  opener,
+		p:       peer,
+		fd:      fileData,
+		eventCh: make(chan FileEvent, len(fileData)),
 	}, nil
 }
 
@@ -66,7 +65,7 @@ func (s *FileSender) Start() {
 	go func() {
 		fileJobs := make(chan FileData, len(s.fd))
 		for i := 0; i < 5; i++ {
-			go s.transferFile(fileJobs)
+			go s.sendFileWorker(fileJobs)
 		}
 
 		for _, f := range s.fd {
@@ -76,7 +75,7 @@ func (s *FileSender) Start() {
 	}()
 }
 
-func (s *FileSender) transferFile(jobs <-chan FileData) {
+func (s *FileSender) sendFileWorker(jobs <-chan FileData) {
 	for fd := range jobs {
 		newFileEvent := func(t EventType, err error) FileEvent {
 			return FileEvent{
@@ -85,10 +84,10 @@ func (s *FileSender) transferFile(jobs <-chan FileData) {
 				err: err,
 			}
 		}
-
+		s.eventCh <- newFileEvent(Start, nil)
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
-			s.resultCh <- newFileEvent(Failed, err)
+			s.eventCh <- newFileEvent(Failed, err)
 			strm.Close()
 			continue
 		}
@@ -97,26 +96,26 @@ func (s *FileSender) transferFile(jobs <-chan FileData) {
 		binary.LittleEndian.PutUint32(pathLn, ln)
 		pathData := append(pathLn, []byte(fd.String())...)
 		if _, err := strm.Write(pathData); err != nil {
-			s.resultCh <- newFileEvent(Failed, err)
+			s.eventCh <- newFileEvent(Failed, err)
 			strm.Close()
 			continue
 		}
 
 		f, err := os.Open(fd.String())
 		if err != nil {
-			s.resultCh <- newFileEvent(Failed, err)
+			s.eventCh <- newFileEvent(Failed, err)
 			strm.Close()
 			f.Close()
 			continue
 		}
 
 		if _, err := io.Copy(strm, f); err != nil {
-			s.resultCh <- newFileEvent(Failed, err)
+			s.eventCh <- newFileEvent(Failed, err)
 			strm.Close()
 			f.Close()
 			continue
 		}
-		s.resultCh <- newFileEvent(Done, nil)
+		s.eventCh <- newFileEvent(Done, nil)
 		strm.Close()
 		f.Close()
 	}
@@ -166,11 +165,15 @@ func allFilesWithinDirectory(dir string) ([]FileData, error) {
 // FileReceiver is used to accept file data through a stream and write the file data within
 // the current execution directory.
 type FileReceiver struct {
-	lis StreamListener
+	lis     StreamListener
+	eventCh chan FileEvent
 }
 
 func NewFileReceiver(lis StreamListener) *FileReceiver {
-	r := &FileReceiver{lis}
+	r := &FileReceiver{
+		lis:     lis,
+		eventCh: make(chan FileEvent, 10),
+	}
 	go r.startListening()
 	return r
 }
@@ -179,25 +182,23 @@ func (r *FileReceiver) startListening() {
 	for {
 		select {
 		case strm := <-r.lis.ListenForStream():
-			go func() {
-				if err := writeFile(strm); err != nil {
-					log.Println(err)
-				}
-			}()
+			go writeFile(strm, r.eventCh)
 		}
 	}
 }
 
-func writeFile(strm io.ReadCloser) error {
+func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
 	defer strm.Close()
 	b := make([]byte, 5)
 	if _, err := strm.Read(b); err != nil {
-		return err
+		eventCh <- FileEvent{Failed, "", err}
+		return
 	}
 	pathLn := binary.LittleEndian.Uint32(b)
 	pathB := make([]byte, pathLn)
 	if _, err := strm.Read(pathB); err != nil {
-		return err
+		eventCh <- FileEvent{Failed, "", err}
+		return
 	}
 
 	path := string(pathB)
@@ -206,18 +207,21 @@ func writeFile(strm io.ReadCloser) error {
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0777); err != nil {
-			return err
+			eventCh <- FileEvent{Failed, path[i:], err}
+			return
 		}
 	}
 
 	f, err := os.Create(path)
 	defer f.Close()
 	if err != nil {
-		return err
+		eventCh <- FileEvent{Failed, path[i:], err}
+		return
 	}
 
 	if _, err := io.Copy(f, strm); err != nil {
-		return err
+		eventCh <- FileEvent{Failed, path[i:], err}
+		return
 	}
-	return nil
+	eventCh <- FileEvent{Done, path[i:], nil}
 }
