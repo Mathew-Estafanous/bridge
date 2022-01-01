@@ -9,18 +9,6 @@ import (
 	"strings"
 )
 
-// StreamOpener is an interface that enables the ability to open a read/write
-// connection with another peer using the peer's ID.
-type StreamOpener interface {
-	OpenStream(peerId p2p.Peer) (io.WriteCloser, error)
-}
-
-// StreamListener is an interfaces that allows for listening for any new stream
-// connections with this peer.
-type StreamListener interface {
-	ListenForStream() <-chan io.ReadCloser
-}
-
 type EventType uint8
 
 const (
@@ -32,17 +20,23 @@ const (
 	Failed
 )
 
+// StreamOpener is an interface that enables the ability to open a read/write
+// connection with another peer using the peer's ID.
+type StreamOpener interface {
+	OpenStream(peerId p2p.Peer) (io.WriteCloser, error)
+}
+
 type FileEvent struct {
-	typ EventType
+	typ  EventType
 	name string // name of the file for the event.
-	err error // an associated error if the event is an error.
+	err  error  // an associated error if the event is an error.
 }
 
 // FileSender , when running, asynchronously streams all file data within the
 // running directory to the target peer.
 type FileSender struct {
-	opener StreamOpener
-	p      p2p.Peer
+	opener  StreamOpener
+	p       p2p.Peer
 	fd      []FileData
 	eventCh chan FileEvent
 }
@@ -58,6 +52,10 @@ func NewFileSender(peer p2p.Peer, opener StreamOpener) (*FileSender, error) {
 		fd:      fileData,
 		eventCh: make(chan FileEvent, len(fileData)),
 	}, nil
+}
+
+func (s *FileSender) ReceiveEvents() <-chan FileEvent {
+	return s.eventCh
 }
 
 // Start will start the streaming process in a separate goroutine.
@@ -79,9 +77,9 @@ func (s *FileSender) sendFileWorker(jobs <-chan FileData) {
 	for fd := range jobs {
 		newFileEvent := func(t EventType, err error) FileEvent {
 			return FileEvent{
-				typ: t,
+				typ:  t,
 				name: fd.Name(),
-				err: err,
+				err:  err,
 			}
 		}
 		s.eventCh <- newFileEvent(Start, nil)
@@ -162,6 +160,12 @@ func allFilesWithinDirectory(dir string) ([]FileData, error) {
 	return info, nil
 }
 
+// StreamListener is an interfaces that allows for listening for any new stream
+// connections with this peer.
+type StreamListener interface {
+	ListenForStream() <-chan io.ReadCloser
+}
+
 // FileReceiver is used to accept file data through a stream and write the file data within
 // the current execution directory.
 type FileReceiver struct {
@@ -176,6 +180,10 @@ func NewFileReceiver(lis StreamListener) *FileReceiver {
 	}
 	go r.startListening()
 	return r
+}
+
+func (r *FileReceiver) ReceiveEvents() <-chan FileEvent {
+	return r.eventCh
 }
 
 func (r *FileReceiver) startListening() {

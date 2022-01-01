@@ -7,10 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"io"
-	"regexp"
 )
-
-var reg = regexp.MustCompile("(/[^/]*)+$")
 
 type Client struct {
 	s        string
@@ -49,5 +46,4 @@ func (c *Client) ListenForStream() <-chan io.ReadCloser {
 
 func (c *Client) handleMessage(strm network.Stream) {
 	c.streamCh <- strm
-	return
 }
