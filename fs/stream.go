@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 )
 
 type EventType uint8
@@ -20,16 +21,17 @@ const (
 	Failed
 )
 
+type FileEvent struct {
+	Typ   EventType
+	Name  string  // Name of the file for the event.
+	Track Tracker // Track is non-nil when the event type is Start.
+	Err   error   // Err is non-nil if the event type is Failed.
+}
+
 // StreamOpener is an interface that enables the ability to open a read/write
 // connection with another peer using the peer's ID.
 type StreamOpener interface {
 	OpenStream(peerId p2p.Peer) (io.WriteCloser, error)
-}
-
-type FileEvent struct {
-	typ  EventType
-	name string // name of the file for the event.
-	err  error  // an associated error if the event is an error.
 }
 
 // FileSender , when running, asynchronously streams all file data within the
@@ -37,7 +39,7 @@ type FileEvent struct {
 type FileSender struct {
 	opener  StreamOpener
 	p       p2p.Peer
-	fd      []FileData
+	fd      []fileData
 	eventCh chan FileEvent
 }
 
@@ -61,7 +63,7 @@ func (s *FileSender) ReceiveEvents() <-chan FileEvent {
 // Start will start the streaming process in a separate goroutine.
 func (s *FileSender) Start() {
 	go func() {
-		fileJobs := make(chan FileData, len(s.fd))
+		fileJobs := make(chan fileData, len(s.fd))
 		for i := 0; i < 5; i++ {
 			go s.sendFileWorker(fileJobs)
 		}
@@ -73,16 +75,15 @@ func (s *FileSender) Start() {
 	}()
 }
 
-func (s *FileSender) sendFileWorker(jobs <-chan FileData) {
+func (s *FileSender) sendFileWorker(jobs <-chan fileData) {
 	for fd := range jobs {
-		newFileEvent := func(t EventType, err error) FileEvent {
+		newFileEvent := func(et EventType, err error) FileEvent {
 			return FileEvent{
-				typ:  t,
-				name: fd.Name(),
-				err:  err,
+				Typ:  et,
+				Name: fd.Name(),
+				Err:  err,
 			}
 		}
-		s.eventCh <- newFileEvent(Start, nil)
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
 			s.eventCh <- newFileEvent(Failed, err)
@@ -107,7 +108,11 @@ func (s *FileSender) sendFileWorker(jobs <-chan FileData) {
 			continue
 		}
 
-		if _, err := io.Copy(strm, f); err != nil {
+		fileEvent := newFileEvent(Start, nil)
+		syncTrk := &syncTracker{rw: f}
+		fileEvent.Track = syncTrk
+		s.eventCh <- fileEvent
+		if _, err := io.Copy(strm, syncTrk); err != nil {
 			s.eventCh <- newFileEvent(Failed, err)
 			strm.Close()
 			f.Close()
@@ -119,24 +124,24 @@ func (s *FileSender) sendFileWorker(jobs <-chan FileData) {
 	}
 }
 
-type FileData struct {
+type fileData struct {
 	os.FileInfo
 	path string // the path directory.
 }
 
-func (f FileData) String() string {
+func (f fileData) String() string {
 	return f.path + "/" + f.Name()
 }
 
 // will iterate through all the files within the directory and when a directory is present within
 // the current directory, then it will recursively call the child directory.
-func allFilesWithinDirectory(dir string) ([]FileData, error) {
+func allFilesWithinDirectory(dir string) ([]fileData, error) {
 	dirInfo, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get directory info: %v", err)
 	}
 
-	info := make([]FileData, 0, len(dirInfo))
+	info := make([]fileData, 0, len(dirInfo))
 	for _, d := range dirInfo {
 		if d.IsDir() {
 			childInfo, err := allFilesWithinDirectory(dir + "/" + d.Name())
@@ -151,7 +156,7 @@ func allFilesWithinDirectory(dir string) ([]FileData, error) {
 				fmt.Printf("Failed to get fs info of fs %s", d.Name())
 				continue
 			}
-			info = append(info, FileData{
+			info = append(info, fileData{
 				FileInfo: fileInfo,
 				path:     dir,
 			})
@@ -199,13 +204,13 @@ func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
 	defer strm.Close()
 	b := make([]byte, 5)
 	if _, err := strm.Read(b); err != nil {
-		eventCh <- FileEvent{Failed, "", err}
+		eventCh <- FileEvent{Failed, "", nil, err}
 		return
 	}
 	pathLn := binary.LittleEndian.Uint32(b)
 	pathB := make([]byte, pathLn)
 	if _, err := strm.Read(pathB); err != nil {
-		eventCh <- FileEvent{Failed, "", err}
+		eventCh <- FileEvent{Failed, "", nil, err}
 		return
 	}
 
@@ -215,21 +220,50 @@ func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0777); err != nil {
-			eventCh <- FileEvent{Failed, path[i:], err}
+			eventCh <- FileEvent{Failed, path[i:], nil, err}
 			return
 		}
 	}
 
 	f, err := os.Create(path)
+	wt := &syncTracker{rw: f}
+	eventCh <- FileEvent{Start, path[i:], wt, nil}
 	defer f.Close()
 	if err != nil {
-		eventCh <- FileEvent{Failed, path[i:], err}
+		eventCh <- FileEvent{Failed, path[i:], nil, err}
 		return
 	}
 
-	if _, err := io.Copy(f, strm); err != nil {
-		eventCh <- FileEvent{Failed, path[i:], err}
+	if _, err := io.Copy(wt, strm); err != nil {
+		eventCh <- FileEvent{Failed, path[i:], nil, err}
 		return
 	}
-	eventCh <- FileEvent{Done, path[i:], nil}
+	eventCh <- FileEvent{Done, path[i:], nil, nil}
+}
+
+// Tracker is used to get data regarding how much data has successfully
+// synced (either sent or received).
+type Tracker interface {
+	SyncedSize() uint64
+}
+
+type syncTracker struct {
+	rw   io.ReadWriter
+	size uint64 // size is the total number of bits that have been written.
+}
+
+func (s *syncTracker) SyncedSize() uint64 {
+	return atomic.LoadUint64(&s.size)
+}
+
+func (s *syncTracker) Write(p []byte) (n int, err error) {
+	n, err = s.rw.Write(p)
+	atomic.AddUint64(&s.size, uint64(n))
+	return n, err
+}
+
+func (s *syncTracker) Read(p []byte) (n int, err error) {
+	n, err = s.rw.Read(p)
+	atomic.AddUint64(&s.size, uint64(n))
+	return n, err
 }
