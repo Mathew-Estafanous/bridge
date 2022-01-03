@@ -37,12 +37,10 @@ func runUse(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
-	fmt.Printf("Bridge: \n%v\n\n", style.Render(args[0]))
 	fr := fs.NewFileReceiver(client)
-	sm := syncModel{
+	sm := &syncModel{
 		er:       fr,
+		session: args[0],
 		currSync: make(map[string]fs.Tracker),
 		closeCh: make(chan struct{}),
 	}
@@ -59,16 +57,17 @@ type EventReceiver interface {
 
 type syncModel struct {
 	er EventReceiver
+	session string
 	mut sync.Mutex
 	currSync map[string]fs.Tracker
 	closeCh chan struct{}
 }
 
-func (m syncModel) Init() tea.Cmd {
+func (m *syncModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -82,27 +81,33 @@ func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, m.listenForEvents
 }
 
-func (m syncModel) View() string {
-	headStyle := lipgloss.NewStyle().Background(lipgloss.Color(36))
-	s := headStyle.Render("Files: ") + "\n"
+func (m *syncModel) View() string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
+	s := fmt.Sprintf("Bridge: \n%v\n\n", style.Render(m.session))
+
+	headStyle := lipgloss.NewStyle().Background(lipgloss.Color("36")).
+		Foreground(lipgloss.Color("231"))
+	s += headStyle.Render(" Files: ") + "\n"
+	fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(1)
 	m.mut.Lock()
 	for k, v := range m.currSync {
-		fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(2)
-		s += fileStyle.Render(fmt.Sprintf("%v -- %v", k, v.SyncedSize()))
+		s += fileStyle.Render(fmt.Sprintf("%v -- %v", k, v.SyncedSize())) + "\n"
 	}
 	m.mut.Unlock()
 	return s
 }
 
-func (m syncModel) listenForEvents() tea.Msg {
+func (m *syncModel) listenForEvents() tea.Msg {
 	select {
 	case event := <- m.er.ReceiveEvents():
+		m.mut.Lock()
 		switch event.Typ {
 		case fs.Start:
-			m.mut.Lock()
 			m.currSync[event.Name] = event.Track
-			m.mut.Unlock()
+		case fs.Done:
+			delete(m.currSync, event.Name)
 		}
+		m.mut.Unlock()
 	case <- m.closeCh:
 		return tea.KeyMsg(tea.Key{Type: 3})
 	}
