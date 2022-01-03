@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"github.com/Mathew-Estafanous/bridge/fs"
 	"github.com/Mathew-Estafanous/bridge/p2p"
+	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"log"
+	"sync"
 )
 
 var useCmd = &cobra.Command{
@@ -35,6 +38,74 @@ func runUse(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	_ = fs.NewFileReceiver(client)
-	run(client)
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
+	fmt.Printf("Bridge: \n%v\n\n", style.Render(args[0]))
+	fr := fs.NewFileReceiver(client)
+	sm := syncModel{
+		er:       fr,
+		currSync: make(map[string]fs.Tracker),
+		closeCh: make(chan struct{}),
+	}
+	p := tea.NewProgram(sm)
+	if err := p.Start(); err != nil {
+		log.Println(err)
+		return
+	}
 }
+
+type EventReceiver interface {
+	ReceiveEvents() <- chan fs.FileEvent
+}
+
+type syncModel struct {
+	er EventReceiver
+	mut sync.Mutex
+	currSync map[string]fs.Tracker
+	closeCh chan struct{}
+}
+
+func (m syncModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		// These keys should exit the program.
+		case "ctrl+c", "q":
+			close(m.closeCh)
+			return m, tea.Quit
+		}
+	}
+
+	return m, m.listenForEvents
+}
+
+func (m syncModel) View() string {
+	headStyle := lipgloss.NewStyle().Background(lipgloss.Color(36))
+	s := headStyle.Render("Files: ") + "\n"
+	m.mut.Lock()
+	for k, v := range m.currSync {
+		fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(2)
+		s += fileStyle.Render(fmt.Sprintf("%v -- %v", k, v.SyncedSize()))
+	}
+	m.mut.Unlock()
+	return s
+}
+
+func (m syncModel) listenForEvents() tea.Msg {
+	select {
+	case event := <- m.er.ReceiveEvents():
+		switch event.Typ {
+		case fs.Start:
+			m.mut.Lock()
+			m.currSync[event.Name] = event.Track
+			m.mut.Unlock()
+		}
+	case <- m.closeCh:
+		return tea.KeyMsg(tea.Key{Type: 3})
+	}
+	return nil
+}
+
