@@ -55,6 +55,11 @@ func handledJoined(bridge *p2p.Bridge) {
 				continue
 			}
 			ws.Start()
+			// TODO: Handle receiving file events.
+			e := <- ws.ReceiveEvents()
+			if e.Err != nil {
+				log.Println(e.Err)
+			}
 		}
 	}
 }
