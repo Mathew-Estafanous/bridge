@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"log"
+	"time"
 )
 
 var useCmd = &cobra.Command{
@@ -40,7 +41,7 @@ func runUse(cmd *cobra.Command, args []string) {
 	sm := syncModel{
 		er:       fr,
 		session: args[0],
-		currSync: make(map[string]fs.Tracker),
+		currSync: make([]syncingFile, 0),
 		closeCh: make(chan struct{}),
 	}
 	p := tea.NewProgram(sm)
@@ -54,10 +55,15 @@ type EventReceiver interface {
 	ReceiveEvents() <- chan fs.FileEvent
 }
 
+type syncingFile struct {
+	name string
+	track fs.Tracker
+}
+
 type syncModel struct {
 	er EventReceiver
 	session string
-	currSync map[string]fs.Tracker
+	currSync []syncingFile
 	closeCh chan struct{}
 }
 
@@ -73,14 +79,21 @@ func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fs.FileEvent:
 		switch msg.Typ {
 		case fs.Start:
-			m.currSync[msg.Name] = msg.Track
-		case fs.Done:
-			delete(m.currSync, msg.Name)
+			m.currSync = append(m.currSync, syncingFile{msg.Name, msg.Track})
+		case fs.Done, fs.Failed:
+			for i, v := range m.currSync {
+				if v.name == msg.Name {
+					m.currSync = append(m.currSync[:i], m.currSync[i+1:]...)
+					break
+				}
+			}
 		}
 		return m, listenForEvents(m.er)
 	default:
-		return m, nil
-
+		return m, func() tea.Msg {
+			time.Sleep(200 * time.Millisecond)
+			return "refresh"
+		}
 	}
 }
 
@@ -92,8 +105,8 @@ func (m syncModel) View() string {
 		Foreground(lipgloss.Color("231"))
 	s += headStyle.Render(" Files: ") + "\n"
 	fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(1)
-	for k, v := range m.currSync {
-		s += fileStyle.Render(fmt.Sprintf("%v -- %v", k, v.SyncedSize())) + "\n"
+	for _, f := range m.currSync {
+		s += fileStyle.Render(fmt.Sprintf("%v -- %v", f.name, f.track.SyncedSize())) + "\n"
 	}
 	return s
 }

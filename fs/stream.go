@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 type EventType uint8
@@ -258,7 +257,6 @@ func (s *syncTracker) SyncedSize() uint64 {
 }
 
 func (s *syncTracker) Write(p []byte) (n int, err error) {
-	time.Sleep(500 * time.Millisecond)
 	n, err = s.rw.Write(p)
 	atomic.AddUint64(&s.size, uint64(n))
 	return n, err
