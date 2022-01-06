@@ -24,7 +24,7 @@ be shared with those you wish to connect with.`,
 
 func init() {
 	rootCmd.AddCommand(openCmd)
-	rootCmd.PersistentFlags().BoolP("test", "t", false, "determine the mode of the bridge")
+	openCmd.PersistentFlags().BoolP("test", "t", false, "determine the mode of the bridge")
 }
 
 func runOpen(cmd *cobra.Command, args []string) {

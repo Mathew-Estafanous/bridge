@@ -31,7 +31,7 @@ type FileEvent struct {
 // StreamOpener is an interface that enables the ability to open a read/write
 // connection with another peer using the peer's ID.
 type StreamOpener interface {
-	OpenStream(peerId p2p.Peer) (io.WriteCloser, error)
+	OpenStream(peerId p2p.Peer) (p2p.WriteResetter, error)
 }
 
 // FileSender , when running, asynchronously streams all file data within the
@@ -86,8 +86,9 @@ func (s *FileSender) sendFileWorker(jobs <-chan fileData) {
 		}
 		strm, err := s.opener.OpenStream(s.p)
 		if err != nil {
+			err = fmt.Errorf("couldn't open the stream: %w", err)
 			s.eventCh <- newFileEvent(Failed, err)
-			strm.Close()
+			strm.Reset()
 			continue
 		}
 		ln := uint32(len([]byte(fd.String())))
@@ -95,15 +96,17 @@ func (s *FileSender) sendFileWorker(jobs <-chan fileData) {
 		binary.LittleEndian.PutUint32(pathLn, ln)
 		pathData := append(pathLn, []byte(fd.String())...)
 		if _, err := strm.Write(pathData); err != nil {
+			err = fmt.Errorf("could not write path data: %w", err)
 			s.eventCh <- newFileEvent(Failed, err)
-			strm.Close()
+			strm.Reset()
 			continue
 		}
 
 		f, err := os.Open(fd.String())
 		if err != nil {
+			err = fmt.Errorf("unable to open path %s: %w", fd.String(), err)
 			s.eventCh <- newFileEvent(Failed, err)
-			strm.Close()
+			strm.Reset()
 			f.Close()
 			continue
 		}
@@ -113,13 +116,14 @@ func (s *FileSender) sendFileWorker(jobs <-chan fileData) {
 		fileEvent.Track = syncTrk
 		s.eventCh <- fileEvent
 		if _, err := io.Copy(strm, syncTrk); err != nil {
+			err = fmt.Errorf("failed to complete streaming: %w", err)
 			s.eventCh <- newFileEvent(Failed, err)
-			strm.Close()
+			strm.Reset()
 			f.Close()
 			continue
 		}
 		s.eventCh <- newFileEvent(Done, nil)
-		strm.Close()
+		strm.Reset()
 		f.Close()
 	}
 }
@@ -201,15 +205,16 @@ func (r *FileReceiver) startListening() {
 }
 
 func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
-	defer strm.Close()
 	b := make([]byte, 5)
 	if _, err := strm.Read(b); err != nil {
+		err = fmt.Errorf("couldn't read first 5 bytes: %w", err)
 		eventCh <- FileEvent{Failed, "", nil, err}
 		return
 	}
 	pathLn := binary.LittleEndian.Uint32(b)
 	pathB := make([]byte, pathLn)
 	if _, err := strm.Read(pathB); err != nil {
+		err = fmt.Errorf("couldn't read file path and name: %w", err)
 		eventCh <- FileEvent{Failed, "", nil, err}
 		return
 	}
@@ -230,11 +235,13 @@ func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
 	eventCh <- FileEvent{Start, path[i:], wt, nil}
 	defer f.Close()
 	if err != nil {
+		err = fmt.Errorf("unable to create file %s: %w", path, err)
 		eventCh <- FileEvent{Failed, path[i:], nil, err}
 		return
 	}
 
 	if _, err := io.Copy(wt, strm); err != nil {
+		err = fmt.Errorf("failed to complete streaming %s: %w", path[i:], err)
 		eventCh <- FileEvent{Failed, path[i:], nil, err}
 		return
 	}

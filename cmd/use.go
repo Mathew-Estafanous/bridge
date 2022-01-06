@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -63,6 +64,7 @@ type syncingFile struct {
 type syncModel struct {
 	er EventReceiver
 	session string
+	mu sync.Mutex
 	currSync []syncingFile
 	closeCh chan struct{}
 }
@@ -79,14 +81,18 @@ func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fs.FileEvent:
 		switch msg.Typ {
 		case fs.Start:
+			m.mu.Lock()
 			m.currSync = append(m.currSync, syncingFile{msg.Name, msg.Track})
+			m.mu.Unlock()
 		case fs.Done, fs.Failed:
+			m.mu.Lock()
 			for i, v := range m.currSync {
 				if v.name == msg.Name {
 					m.currSync = append(m.currSync[:i], m.currSync[i+1:]...)
 					break
 				}
 			}
+			m.mu.Unlock()
 		}
 		return m, listenForEvents(m.er)
 	default:
@@ -105,9 +111,11 @@ func (m syncModel) View() string {
 		Foreground(lipgloss.Color("231"))
 	s += headStyle.Render(" Files: ") + "\n"
 	fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(1)
+	m.mu.Lock()
 	for _, f := range m.currSync {
 		s += fileStyle.Render(fmt.Sprintf("%v -- %v", f.name, f.track.SyncedSize())) + "\n"
 	}
+	m.mu.Unlock()
 	return s
 }
 
