@@ -9,10 +9,15 @@ import (
 	"io"
 )
 
+type ReadResetter interface {
+	io.Reader
+	Reset() error
+}
+
 type Client struct {
 	s        string
 	h        host.Host
-	streamCh chan io.ReadCloser
+	streamCh chan ReadResetter
 }
 
 func (c *Client) HandlePeerFound(_ peer.AddrInfo) {}
@@ -30,7 +35,7 @@ func NewClient(sessionID string) (*Client, error) {
 	c := &Client{
 		h:        host,
 		s:        sessionID,
-		streamCh: make(chan io.ReadCloser, 1),
+		streamCh: make(chan ReadResetter, 1),
 	}
 
 	host.SetStreamHandler(protocol.ID(sessionID), c.handleMessage)
@@ -40,7 +45,7 @@ func NewClient(sessionID string) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) ListenForStream() <-chan io.ReadCloser {
+func (c *Client) ListenForStream() <-chan ReadResetter {
 	return c.streamCh
 }
 
