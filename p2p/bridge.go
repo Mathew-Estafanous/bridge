@@ -15,6 +15,7 @@ import (
 
 type WriteResetter interface {
 	io.Writer
+	io.Closer
 	Reset() error
 }
 

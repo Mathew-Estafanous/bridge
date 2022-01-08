@@ -3,7 +3,6 @@ module github.com/Mathew-Estafanous/bridge
 go 1.17
 
 require (
-	github.com/charmbracelet/bubbles v0.9.0
 	github.com/charmbracelet/bubbletea v0.19.2
 	github.com/charmbracelet/lipgloss v0.3.0
 	github.com/google/uuid v1.3.0
@@ -13,7 +12,6 @@ require (
 )
 
 require (
-	github.com/atotto/clipboard v0.1.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -108,7 +106,6 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/sahilm/fuzzy v0.1.0 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect

@@ -123,7 +123,7 @@ func (s *FileSender) sendFileWorker(jobs <-chan fileData) {
 			continue
 		}
 		s.eventCh <- newFileEvent(Done, nil)
-		strm.Reset()
+		strm.Close()
 		f.Close()
 	}
 }
@@ -172,7 +172,7 @@ func allFilesWithinDirectory(dir string) ([]fileData, error) {
 // StreamListener is an interfaces that allows for listening for any new stream
 // connections with this peer.
 type StreamListener interface {
-	ListenForStream() <-chan p2p.ReadResetter
+	ListenForStream() <-chan io.ReadCloser
 }
 
 // FileReceiver is used to accept file data through a stream and write the file data within
@@ -204,8 +204,8 @@ func (r *FileReceiver) startListening() {
 	}
 }
 
-func writeFile(strm p2p.ReadResetter, eventCh chan FileEvent) {
-	defer strm.Reset()
+func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
+	defer strm.Close()
 	b := make([]byte, 5)
 	if _, err := strm.Read(b); err != nil {
 		err = fmt.Errorf("couldn't read first 5 bytes: %w", err)

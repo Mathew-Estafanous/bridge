@@ -94,12 +94,12 @@ func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncMu.Unlock()
 		case fs.Done:
 			m.syncMu.Lock()
-			remove(m.currSync, msg.Name)
+			m.currSync = remove(m.currSync, msg.Name)
 			m.syncMu.Unlock()
 		case fs.Failed:
 			if msg.Name != "" {
 				m.syncMu.Lock()
-				remove(m.currSync, msg.Name)
+				m.currSync = remove(m.currSync, msg.Name)
 				m.syncMu.Unlock()
 			}
 			m.failMu.Lock()
@@ -121,26 +121,13 @@ func (m syncModel) View() string {
 
 	headStyle := lipgloss.NewStyle().Background(lipgloss.Color("36")).
 		Foreground(lipgloss.Color("231"))
-	s += headStyle.Render(" Files: ") + "\n"
+	s += headStyle.Render(" Syncing: ") + "\n"
 	fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(1)
 	m.syncMu.Lock()
 	for _, f := range m.currSync {
 		s += fileStyle.Render(fmt.Sprintf("%v -- %v", f.name, f.track.SyncedSize())) + "\n"
 	}
 	m.syncMu.Unlock()
-
-	if len(m.failedSync) == 0 {
-		return s
-	}
-
-	style = lipgloss.NewStyle().Background(lipgloss.Color("1")).
-		Foreground(lipgloss.Color("231"))
-	s += fmt.Sprintf("\n%v\n", style.Render(" Failed: "))
-	m.failMu.Lock()
-	for _, f := range m.failedSync {
-		s += fileStyle.Render(fmt.Sprintf("%s: %v", f.name, f.err))
-	}
-	m.failMu.Unlock()
 	return s
 }
 
