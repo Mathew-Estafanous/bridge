@@ -3,12 +3,9 @@ package cmd
 import (
 	"github.com/Mathew-Estafanous/bridge/fs"
 	"github.com/Mathew-Estafanous/bridge/p2p"
+	"github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"io"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 var openCmd = &cobra.Command{
@@ -40,43 +37,60 @@ func runOpen(cmd *cobra.Command, args []string) {
 		return
 	}
 	log.Printf("Session ID: %s", bridge.Session())
-	go handledJoined(bridge)
-	run(bridge)
+	sendMdl := sendModel{
+		joinLis: bridge,
+		strmOpen: bridge,
+		session: bridge.Session(),
+	}
+	p := tea.NewProgram(sendMdl)
+	if err := p.Start(); err != nil {
+		log.Println(err)
+	}
 }
 
-// TODO: Change how joined peers are handled.
-func handledJoined(bridge *p2p.Bridge) {
-	for {
-		select {
-		case p := <-bridge.JoinedPeerListener():
-			ws, err := fs.NewFileSender(p, bridge)
-			if err != nil {
-				log.Printf("Failed to create write stream: %v", err)
-				continue
-			}
-			ws.Start()
-			// TODO: Handle receiving file events.
-			go func() {
-				for {
-					e := <- ws.ReceiveEvents()
-					if e.Err != nil {
-						log.Println(e.Err)
-					}
+type JoinListener interface {
+	JoinedPeerListener() <- chan p2p.Peer
+}
+
+type sendModel struct {
+	joinLis JoinListener
+	strmOpen fs.StreamOpener
+	session string
+}
+
+func (s sendModel) Init() tea.Cmd {
+	return handleJoinedPeer(s.joinLis)
+}
+
+func (s sendModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case p2p.Peer:
+		ws, err := fs.NewFileSender(m, s.strmOpen)
+		if err != nil {
+			return s, handleJoinedPeer(s.joinLis)
+		}
+		ws.Start()
+		go func() {
+			for {
+				e := <- ws.ReceiveEvents()
+				if e.Err != nil {
+					log.Println(e.Err)
 				}
-			}()
+			}
+		}()
+	}
+	return s, handleJoinedPeer(s.joinLis)
+}
+
+func (s sendModel) View() string {
+	panic("implement me")
+}
+
+func handleJoinedPeer(joinLis JoinListener) func() tea.Msg {
+	return func() tea.Msg {
+		select {
+		case p := <- joinLis.JoinedPeerListener():
+			return p
 		}
 	}
-}
-
-func run(closer io.Closer) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
-	<-c
-
-	log.Printf("\rExiting...\n")
-	if err := closer.Close(); err != nil {
-		log.Printf("Encountered issue while closing bridge: %v", err)
-		os.Exit(1)
-	}
-	os.Exit(0)
 }

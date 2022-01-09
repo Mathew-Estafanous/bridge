@@ -49,7 +49,6 @@ func runUse(cmd *cobra.Command, args []string) {
 	p := tea.NewProgram(sm)
 	if err := p.Start(); err != nil {
 		log.Println(err)
-		return
 	}
 }
 
