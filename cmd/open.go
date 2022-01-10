@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/Mathew-Estafanous/bridge/fs"
 	"github.com/Mathew-Estafanous/bridge/p2p"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"log"
+	"time"
 )
 
 var openCmd = &cobra.Command{
@@ -36,7 +39,6 @@ func runOpen(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-	log.Printf("Session ID: %s", bridge.Session())
 	sendMdl := sendModel{
 		joinLis: bridge,
 		strmOpen: bridge,
@@ -56,6 +58,9 @@ type sendModel struct {
 	joinLis JoinListener
 	strmOpen fs.StreamOpener
 	session string
+	closeCh chan struct{}
+
+	totalClients uint
 }
 
 func (s sendModel) Init() tea.Cmd {
@@ -64,26 +69,43 @@ func (s sendModel) Init() tea.Cmd {
 
 func (s sendModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case tea.KeyMsg:
+		close(s.closeCh)
+		return s, tea.Quit
 	case p2p.Peer:
 		ws, err := fs.NewFileSender(m, s.strmOpen)
 		if err != nil {
 			return s, handleJoinedPeer(s.joinLis)
 		}
+		s.totalClients++
 		ws.Start()
+
 		go func() {
 			for {
-				e := <- ws.ReceiveEvents()
-				if e.Err != nil {
-					log.Println(e.Err)
+				select {
+				case e := <-ws.ReceiveEvents():
+					if e.Err != nil {
+						log.Println(e.Err)
+						return
+					}
+				case <- s.closeCh:
+					return
 				}
 			}
 		}()
+		return s, handleJoinedPeer(s.joinLis)
+	default:
+		return s, func() tea.Msg {
+			time.Sleep(200 * time.Millisecond)
+			return "refresh"
+		}
 	}
-	return s, handleJoinedPeer(s.joinLis)
 }
 
 func (s sendModel) View() string {
-	panic("implement me")
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
+	out := fmt.Sprintf("Bridge: \n%v\n\n", style.Render(s.session))
+	return out
 }
 
 func handleJoinedPeer(joinLis JoinListener) func() tea.Msg {
