@@ -120,13 +120,28 @@ func (m syncModel) View() string {
 
 	headStyle := lipgloss.NewStyle().Background(lipgloss.Color("36")).
 		Foreground(lipgloss.Color("231"))
-	s += headStyle.Render(" Syncing: ") + "\n"
 	fileStyle := lipgloss.NewStyle().Bold(true).PaddingLeft(1)
-	m.syncMu.Lock()
-	for _, f := range m.currSync {
-		s += fileStyle.Render(fmt.Sprintf("%v -- %v", f.name, f.track.SyncedSize())) + "\n"
+	if len(m.currSync) > 0 {
+		s += headStyle.Render(" Syncing: ") + "\n"
+		m.syncMu.Lock()
+		for _, f := range m.currSync {
+			s += fileStyle.Render(fmt.Sprintf("%v -- %v", f.name, f.track.SyncedSize())) + "\n"
+		}
+		m.syncMu.Unlock()
+	} else {
+		headStyle.Background(lipgloss.Color("1"))
+		s += headStyle.Render(" Errors: ") + "\n"
+		if len(m.failedSync) == 0 {
+			s += fileStyle.Render("(None)")
+		} else {
+			m.failMu.Lock()
+			for _, f := range m.failedSync {
+				s += fileStyle.Render(fmt.Sprintf("[%s]: %v", f.name, f.err)) + "\n"
+			}
+			m.failMu.Unlock()
+		}
 	}
-	m.syncMu.Unlock()
+
 	return s
 }
 
