@@ -105,6 +105,10 @@ func (s sendModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s sendModel) View() string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
 	out := fmt.Sprintf("Bridge: \n%v\n\n", style.Render(s.session))
+
+	headStyle := lipgloss.NewStyle().Background(lipgloss.Color("36")).
+		Foreground(lipgloss.Color("231"))
+	out += headStyle.Render(" Sending: ") + "\n"
 	return out
 }
 

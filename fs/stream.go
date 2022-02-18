@@ -249,7 +249,7 @@ func writeFile(strm io.ReadCloser, eventCh chan FileEvent) {
 	eventCh <- FileEvent{Done, path[i:], nil, nil}
 }
 
-// Tracker is used to get data regarding how much data has successfully
+// Tracker is used to get information regarding how much data has successfully
 // synced (either sent or received).
 type Tracker interface {
 	SyncedSize() uint64
