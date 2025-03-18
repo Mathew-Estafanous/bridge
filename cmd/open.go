@@ -27,7 +27,7 @@ func init() {
 	openCmd.PersistentFlags().BoolP("test", "t", false, "determine the mode of the bridge")
 }
 
-func runOpen(cmd *cobra.Command, args []string) {
+func runOpen(cmd *cobra.Command, _ []string) {
 	isTest, err := cmd.Flags().GetBool("test")
 	if err != nil {
 		log.Println(err)
@@ -40,9 +40,9 @@ func runOpen(cmd *cobra.Command, args []string) {
 		return
 	}
 	sendMdl := sendModel{
-		joinLis: bridge,
+		joinLis:  bridge,
 		strmOpen: bridge,
-		session: bridge.Session(),
+		session:  bridge.Session(),
 	}
 	p := tea.NewProgram(sendMdl)
 	if err := p.Start(); err != nil {
@@ -51,14 +51,14 @@ func runOpen(cmd *cobra.Command, args []string) {
 }
 
 type JoinListener interface {
-	JoinedPeerListener() <- chan p2p.Peer
+	JoinedPeerListener() <-chan p2p.Peer
 }
 
 type sendModel struct {
-	joinLis JoinListener
+	joinLis  JoinListener
 	strmOpen fs.StreamOpener
-	session string
-	closeCh chan struct{}
+	session  string
+	closeCh  chan struct{}
 
 	totalClients uint
 }
@@ -88,7 +88,7 @@ func (s sendModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						log.Println(e.Err)
 						return
 					}
-				case <- s.closeCh:
+				case <-s.closeCh:
 					return
 				}
 			}
@@ -115,7 +115,7 @@ func (s sendModel) View() string {
 func handleJoinedPeer(joinLis JoinListener) func() tea.Msg {
 	return func() tea.Msg {
 		select {
-		case p := <- joinLis.JoinedPeerListener():
+		case p := <-joinLis.JoinedPeerListener():
 			return p
 		}
 	}

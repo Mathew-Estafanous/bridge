@@ -39,12 +39,12 @@ func runUse(cmd *cobra.Command, args []string) {
 		return
 	}
 	fr := fs.NewFileReceiver(client)
-	sm := syncModel{
-		er:       fr,
-		session: args[0],
-		currSync: make([]syncingFile, 0),
+	sm := &syncModel{
+		er:         fr,
+		session:    args[0],
+		currSync:   make([]syncingFile, 0),
 		failedSync: make([]failedFile, 0),
-		closeCh: make(chan struct{}),
+		closeCh:    make(chan struct{}),
 	}
 	p := tea.NewProgram(sm)
 	if err := p.Start(); err != nil {
@@ -53,34 +53,34 @@ func runUse(cmd *cobra.Command, args []string) {
 }
 
 type EventReceiver interface {
-	ReceiveEvents() <- chan fs.FileEvent
+	ReceiveEvents() <-chan fs.FileEvent
 }
 
 type syncingFile struct {
-	name string
+	name  string
 	track fs.Tracker
 }
 
 type failedFile struct {
 	name string
-	err error
+	err  error
 }
 
 type syncModel struct {
-	er EventReceiver
-	session  string
-	syncMu   sync.Mutex
-	currSync []syncingFile
-	failMu sync.Mutex
+	er         EventReceiver
+	session    string
+	syncMu     sync.Mutex
+	currSync   []syncingFile
+	failMu     sync.Mutex
 	failedSync []failedFile
-	closeCh chan struct{}
+	closeCh    chan struct{}
 }
 
-func (m syncModel) Init() tea.Cmd {
+func (m *syncModel) Init() tea.Cmd {
 	return listenForEvents(m.er)
 }
 
-func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		close(m.closeCh)
@@ -114,7 +114,7 @@ func (m syncModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m syncModel) View() string {
+func (m *syncModel) View() string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("36")).PaddingLeft(2)
 	s := fmt.Sprintf("Bridge: \n%v\n\n", style.Render(m.session))
 
@@ -147,7 +147,7 @@ func (m syncModel) View() string {
 
 func listenForEvents(er EventReceiver) func() tea.Msg {
 	return func() tea.Msg {
-		return <- er.ReceiveEvents()
+		return <-er.ReceiveEvents()
 	}
 }
 

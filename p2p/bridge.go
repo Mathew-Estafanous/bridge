@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"io"
 	"log"
@@ -55,16 +55,16 @@ func (b *Bridge) HandlePeerFound(info peer.AddrInfo) {
 	if info.ID == b.h.ID() {
 		return
 	}
-	log.Printf("Discovered new peer %s", info.ID.Pretty())
+	log.Printf("Discovered new peer %s", info.ID.String())
 	err := b.h.Connect(context.Background(), info)
 	if err != nil {
-		fmt.Printf("error connecting to peer %s: %s\n", info.ID.Pretty(), err)
+		fmt.Printf("error connecting to peer %s: %s\n", info.ID.String(), err)
 	}
 	b.joinCh <- Peer(info.ID)
 }
 
 func NewBridge(testMode bool) (*Bridge, error) {
-	host, err := libp2p.New()
+	p2pHost, err := libp2p.New()
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +78,11 @@ func NewBridge(testMode bool) (*Bridge, error) {
 
 	brg := &Bridge{
 		session: sessionId,
-		h:       host,
+		h:       p2pHost,
 		joinCh:  make(chan Peer, 1),
 	}
 
-	if err := setupDiscovery(host, sessionId, brg); err != nil {
+	if err := setupDiscovery(p2pHost, sessionId, brg); err != nil {
 		return nil, err
 	}
 	return brg, nil

@@ -2,10 +2,10 @@ package p2p
 
 import (
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"io"
 )
 
@@ -23,18 +23,18 @@ func (c *Client) Close() error {
 }
 
 func NewClient(sessionID string) (*Client, error) {
-	host, err := libp2p.New()
+	p2pHost, err := libp2p.New()
 	if err != nil {
 		return nil, err
 	}
 	c := &Client{
-		h:        host,
+		h:        p2pHost,
 		s:        sessionID,
 		streamCh: make(chan io.ReadCloser, 1),
 	}
 
-	host.SetStreamHandler(protocol.ID(sessionID), c.handleMessage)
-	if err := setupDiscovery(host, sessionID, c); err != nil {
+	p2pHost.SetStreamHandler(protocol.ID(sessionID), c.handleMessage)
+	if err := setupDiscovery(p2pHost, sessionID, c); err != nil {
 		return nil, err
 	}
 	return c, nil
